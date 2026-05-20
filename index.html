@@ -482,6 +482,18 @@ async function init() {
     userConfig = await loadConfig();
     applyConfig(userConfig);
     if (userConfig.hasKey) showLockScreen(); else showMainContent();
+
+    // Enter 发送（IME 安全：输入法组合文字期间不触发）
+    const textarea = document.getElementById('postText');
+    let composing = false;
+    textarea.addEventListener('compositionstart', () => composing = true);
+    textarea.addEventListener('compositionend', () => composing = false);
+    textarea.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !composing && !e.isComposing) {
+            e.preventDefault();
+            sendPost();
+        }
+    });
 }
 
 // ===================== 配置 =====================

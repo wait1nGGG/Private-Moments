@@ -1,0 +1,7 @@
+node_modules/
+uploads/*
+!uploads/default/
+.DS_Store
+config.json
+posts.json
+*.log
