@@ -138,6 +138,71 @@ app.delete('/api/post/:id', async (req, res) => {
     res.json({ success: true });
 });
 
+// ---- 备份 API ----
+const AdmZip = require('adm-zip');
+
+app.post('/api/backup', async (req, res) => {
+    try {
+        const zip = new AdmZip();
+        if (fs.pathExistsSync(POSTS_FILE)) zip.addLocalFile(POSTS_FILE);
+        if (fs.pathExistsSync(CONFIG_FILE)) zip.addLocalFile(CONFIG_FILE);
+        if (fs.pathExistsSync('uploads')) zip.addLocalFolder('uploads', 'uploads');
+
+        const backupFile = path.join(__dirname, 'backup.zip');
+        zip.writeZip(backupFile);
+        const size = fs.statSync(backupFile).size;
+        res.json({ success: true, size, time: new Date().toLocaleString() });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.get('/api/backup/download', async (req, res) => {
+    const backupFile = path.join(__dirname, 'backup.zip');
+    if (!fs.pathExistsSync(backupFile)) {
+        return res.status(404).json({ success: false, error: '备份文件不存在，请先创建备份' });
+    }
+    res.download(backupFile, `moments-backup-${new Date().toISOString().slice(0, 10)}.zip`);
+});
+
+app.post('/api/backup/restore', (req, res) => {
+    const restoreUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } }).single('backup');
+    restoreUpload(req, res, async (err) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        if (!req.file) return res.status(400).json({ success: false, error: '请上传备份文件' });
+
+        const tmpDir = path.join(__dirname, 'restore_tmp');
+        try {
+            const zip = new AdmZip(req.file.buffer);
+            await fs.emptyDir(tmpDir);
+            zip.extractAllTo(tmpDir, true);
+
+            const postsPath = path.join(tmpDir, 'posts.json');
+            const configPath = path.join(tmpDir, 'config.json');
+            const uploadsPath = path.join(tmpDir, 'uploads');
+
+            if (fs.pathExistsSync(postsPath)) {
+                await fs.copy(postsPath, POSTS_FILE, { overwrite: true });
+            }
+            if (fs.pathExistsSync(configPath)) {
+                await fs.copy(configPath, CONFIG_FILE, { overwrite: true });
+            }
+            if (fs.pathExistsSync(uploadsPath)) {
+                await fs.copy(uploadsPath, 'uploads/', { overwrite: true });
+            }
+
+            await fs.remove(tmpDir);
+
+            db = loadConfig();
+            posts = loadPostsFile();
+            res.json({ success: true });
+        } catch (e) {
+            await fs.remove(tmpDir).catch(() => {});
+            res.status(500).json({ success: false, error: e.message });
+        }
+    });
+});
+
 app.use(express.static('./'));
 
 function getLocalIPs() {
