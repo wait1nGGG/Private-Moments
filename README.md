@@ -26,11 +26,7 @@
 
 ### 启动
 
-**macOS：**
-
-双击 `start.command`（或终端执行 `./start.sh`）
-
-**Linux：**
+**MacOS & Linux：**
 
 ```bash
 chmod +x start.sh
